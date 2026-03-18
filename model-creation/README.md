@@ -2,3 +2,5 @@
 
 <!-- TODO 1: Update the description of the service and the link to the documentation. -->
 _Check the [related documentation](https://docs.swiss-ai-center.ch/reference/core-concepts/service/) for more information._
+
+Use uv as dependency manager to install the dependencies 
