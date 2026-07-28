@@ -90,11 +90,25 @@ jobs:
     needs: review
     runs-on: ubuntu-latest
     if: ${{ vars.RUN_CICD == 'true' }}
+    outputs:
+      model-project-ready: ${{ steps.model-project.outputs.ready }}
     steps:
       - name: Clone repository
         uses: actions/checkout@v4
 
+      - name: Check whether the model project is initialized
+        id: model-project
+        shell: bash
+        run: |
+          if [ -f "./model-creation/pyproject.toml" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping model training because model-creation/pyproject.toml does not exist yet."
+          fi
+
       - name: Run ML experiment with DVC
+        if: steps.model-project.outputs.ready == 'true'
         uses: swiss-ai-center/common-code/.github/actions/run-ml-experiment-with-dvc@main
         with:
           ml-experiment-path: ./model-creation
@@ -102,6 +116,7 @@ jobs:
           s3-secret-access-key: ${{ env.S3_SECRET_ACCESS_KEY }}
 
       - name: Upload model
+        if: steps.model-project.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: model
@@ -117,6 +132,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download model
+        if: needs.train.outputs.model-project-ready == 'true'
         uses: actions/download-artifact@v4
         with:
           name: model
@@ -129,9 +145,11 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   release:
-    needs: test
+    needs:
+      - train
+      - test
     runs-on: ubuntu-latest
-    if: ${{ vars.RUN_CICD == 'true' && success() && github.ref == 'refs/heads/main' && (vars.DEPLOY_DEV == 'true' || vars.DEPLOY_PROD == 'true') }}
+    if: ${{ vars.RUN_CICD == 'true' && success() && needs.train.outputs.model-project-ready == 'true' && github.ref == 'refs/heads/main' && (vars.DEPLOY_DEV == 'true' || vars.DEPLOY_PROD == 'true') }}
     steps:
       - name: Clone repository
         uses: actions/checkout@v4
